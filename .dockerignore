@@ -1,0 +1,40 @@
+# Lo que NO se envia al daemon de Docker como contexto de build.
+# Menos contexto = build mas rapido y menos riesgo de filtrar secretos.
+
+# Control de versiones y herramientas
+.git
+.github
+.atl
+.vs
+.vscode
+.idea
+
+# Resultados de compilacion locales (se regeneran dentro del contenedor)
+**/bin
+**/obj
+publish
+artifacts
+TestResults
+coverage
+
+# Tests, documentacion y planificacion: no hacen falta en la imagen
+tests
+docs
+odd
+*.md
+
+# Infraestructura (Terraform) y estado local
+infra
+**/.terraform
+*.tfstate
+*.tfstate.*
+
+# Secretos y configuracion local
+.env
+.env.*
+appsettings.*.local.json
+secrets.json
+
+# El propio Dockerfile no necesita estar dentro de la imagen
+**/Dockerfile
+.dockerignore

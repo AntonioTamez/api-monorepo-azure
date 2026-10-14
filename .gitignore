@@ -1,4 +1,44 @@
+# .NET build output
 bin/
 obj/
+publish/
+artifacts/
+
+# Visual Studio / Rider / VS Code
 .vs/
+.idea/
+.vscode/
 *.user
+*.suo
+*.userprefs
+
+# Test results and coverage
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.cobertura.xml
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# Keep the dependency lock file committed
+!.terraform.lock.hcl
+
+# OS files
+.DS_Store
+Thumbs.db

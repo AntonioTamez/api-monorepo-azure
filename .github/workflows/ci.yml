@@ -1,0 +1,94 @@
+# Workflow de Integracion Continua (CI).
+# Se ejecuta automaticamente y comprueba que el codigo compila, esta formateado,
+# pasa los tests y no usa paquetes con vulnerabilidades conocidas.
+
+name: CI
+
+# Triggers: eventos que inician el workflow.
+on:
+  # Cada vez que se sube codigo a master (por ejemplo, al fusionar un PR).
+  push:
+    branches: [master]
+  # Cada vez que se abre o actualiza un pull request.
+  pull_request:
+
+# Permisos del GITHUB_TOKEN (la credencial automatica del workflow).
+# Principio de minimo privilegio: solo lectura del repositorio.
+permissions:
+  contents: read
+
+# Concurrencia: si llega un push nuevo a la misma rama mientras hay una ejecucion
+# en curso, la antigua se cancela (ya no interesa su resultado).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build and test
+    # Runner: maquina virtual Linux que proporciona GitHub.
+    runs-on: ubuntu-latest
+    # Si algo se cuelga, no gastamos minutos indefinidamente.
+    timeout-minutes: 15
+
+    steps:
+      # 1) Descarga el codigo del repositorio en el runner.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Instala el SDK de .NET indicado en global.json (misma version que en local).
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # 3) Cache de paquetes NuGet: evita descargarlos en cada ejecucion.
+      #    La clave cambia si cambian los .csproj o la configuracion de build.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # 4) Descarga las dependencias.
+      - name: Restore
+        run: dotnet restore Monorepo.slnx
+
+      # 5) Falla si el codigo no cumple el formato de .editorconfig.
+      - name: Check formatting
+        run: dotnet format Monorepo.slnx --no-restore --verify-no-changes
+
+      # 6) Compila en Release (los warnings ya son errores por Directory.Build.props).
+      - name: Build
+        run: dotnet build Monorepo.slnx -c Release --no-restore
+
+      # 7) Ejecuta los tests y recoge la cobertura con coverlet.
+      - name: Test
+        run: >
+          dotnet test Monorepo.slnx -c Release --no-build
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults
+
+      # 8) Guarda los informes de cobertura como artefacto descargable.
+      #    "if: always()" lo sube aunque los tests hayan fallado.
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: TestResults/**/coverage.cobertura.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+      # 9) Busca paquetes NuGet con vulnerabilidades conocidas (incluye transitivos).
+      #    "dotnet list package" no falla por si solo, asi que buscamos el aviso en la salida.
+      - name: Scan vulnerable packages
+        shell: bash
+        run: |
+          dotnet list Monorepo.slnx package --vulnerable --include-transitive 2>&1 | tee vulnerabilities.log
+          if grep -q "has the following vulnerable packages" vulnerabilities.log; then
+            echo "::error::Se encontraron paquetes vulnerables. Revisa el log anterior."
+            exit 1
+          fi

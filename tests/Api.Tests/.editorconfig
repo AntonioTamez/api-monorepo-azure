@@ -1,0 +1,3 @@
+[*.cs]
+# Test names use underscores on purpose: Method_Behavior.
+dotnet_diagnostic.CA1707.severity = none

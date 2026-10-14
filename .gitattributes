@@ -1,0 +1,11 @@
+# Normaliza los finales de linea para que Windows, Linux y los runners de GitHub
+# no generen diferencias falsas ni scripts rotos.
+#
+# text=auto: Git decide si un archivo es texto y lo guarda con LF en el repositorio.
+* text=auto
+
+# Los scripts de shell SIEMPRE con LF: con CRLF, bash falla con "\r: command not found".
+*.sh text eol=lf
+
+# Los scripts de PowerShell con CRLF (convencion de Windows).
+*.ps1 text eol=crlf

@@ -1,0 +1,15 @@
+# Directorio de plugins y modulos descargados por "terraform init"
+.terraform/
+
+# State local (puede contener secretos) y sus copias de seguridad
+*.tfstate
+*.tfstate.*
+
+# Planes guardados con "terraform plan -out=..."
+*.tfplan
+
+# Registro que Terraform escribe cuando falla
+crash.log
+crash.*.log
+
+# OJO: .terraform.lock.hcl SI se versiona (fija las versiones de los providers).
