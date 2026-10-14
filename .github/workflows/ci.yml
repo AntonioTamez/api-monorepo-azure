@@ -34,7 +34,7 @@ jobs:
     steps:
       # 1) Descarga el codigo del repositorio en el runner.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 2) Instala el SDK de .NET indicado en global.json (misma version que en local).
       - name: Setup .NET
