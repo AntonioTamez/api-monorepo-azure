@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v3
       # Falla si algun .tf no tiene el formato estandar (arreglalo con "terraform fmt -recursive infra").
       - name: Check formatting
@@ -65,7 +65,7 @@ jobs:
         working-directory: infra/envs/${{ matrix.environment }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3

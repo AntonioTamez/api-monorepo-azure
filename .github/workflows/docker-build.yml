@@ -40,7 +40,7 @@ jobs:
     steps:
       # 1) Descarga el codigo en el runner (el runner empieza vacio).
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 2) Login en Azure SIN contrasenas (OIDC). Solo se pasan IDs, que no son secretos.
       #    "vars.X" lee una VARIABLE de GitHub (Settings > Secrets and variables > Actions).
