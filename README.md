@@ -16,6 +16,7 @@ Este repositorio también es un laboratorio práctico para aprender DevOps desde
 | [03 - La aplicación](docs/03-la-aplicacion.md) | La API, el endpoint `/health` y los archivos de configuración del repositorio |
 | [04 - Testing](docs/04-testing.md) | Tests con xUnit, `tests/Api.Tests`, TDD y cómo ejecutarlos |
 | [05 - Docker](docs/05-docker.md) | Imágenes, contenedores, Dockerfile multi-stage y cómo ejecutar la API en un contenedor |
+| [06 - GitHub Actions](docs/06-github-actions.md) | Workflow de CI, triggers, permisos, caché, artefactos, Dependabot y protección de rama |
 
 Los capítulos siguientes (la aplicación, tests, Docker, GitHub Actions, Terraform, Azure) se irán añadiendo a esta tabla.
 
