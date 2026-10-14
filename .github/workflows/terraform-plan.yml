@@ -1,0 +1,168 @@
+# Workflow: revisar los cambios de infraestructura ANTES de fusionarlos.
+# En cada pull request que toque infra/** ejecuta: fmt, init, validate y plan, y publica
+# el plan como comentario en el PR para que el revisor vea exactamente que cambiaria.
+# El plan NO modifica nada en Azure (solo lee). Explicacion: docs/11-cd-y-ambientes.md
+
+name: Terraform plan
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  contents: read
+  # OIDC: pedir el token firmado para entrar a Azure.
+  id-token: write
+  # Necesario para escribir el comentario del plan en el pull request.
+  pull-requests: write
+
+# Si subes un commit nuevo al PR, el plan anterior ya no interesa: se cancela.
+concurrency:
+  group: terraform-plan-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Le dice a Terraform que lo ejecuta un robot: mensajes menos "conversacionales".
+  TF_IN_AUTOMATION: "true"
+  # Nunca preguntar nada por teclado (nadie contestaria y el job se colgaria).
+  TF_INPUT: "false"
+  # Terraform lee cualquier variable llamada TF_VAR_<nombre> como la variable <nombre>.
+  TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+jobs:
+  # JOB 1: comprobar el formato. No necesita Azure.
+  format:
+    name: Terraform fmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      # Falla si algun .tf no tiene el formato estandar (arreglalo con "terraform fmt -recursive infra").
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff infra
+
+  # JOB 2: validar y planificar, una vez por ambiente (matriz).
+  plan:
+    name: Plan ${{ matrix.environment }}
+    needs: format
+    # Los PR desde forks no reciben token OIDC (seguridad de GitHub): los saltamos.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Prod solo si activaste la variable de repositorio ENABLE_PROD=true.
+        environment: ${{ fromJSON(vars.ENABLE_PROD == 'true' && '["dev","prod"]' || '["dev"]') }}
+
+    defaults:
+      run:
+        # Todos los "run" se ejecutan dentro de la carpeta del ambiente.
+        shell: bash
+        working-directory: infra/envs/${{ matrix.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          # El "wrapper" altera la salida de terraform; no lo necesitamos.
+          terraform_wrapper: false
+
+      # Sin "environment:" en el job, el subject OIDC es "repo:OWNER/REPO:pull_request".
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Conecta con el state remoto. Terraform usa la sesion de az del paso anterior.
+      - name: Terraform init
+        env:
+          TFSTATE_RESOURCE_GROUP: ${{ vars.TFSTATE_RESOURCE_GROUP }}
+          TFSTATE_STORAGE_ACCOUNT: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=$TFSTATE_RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TFSTATE_STORAGE_ACCOUNT" \
+            -backend-config="container_name=tfstate"
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      # continue-on-error: si el plan falla, aun queremos comentar el error en el PR;
+      # el ultimo paso del job hace fallar el check de todas formas.
+      - name: Terraform plan
+        id: plan
+        continue-on-error: true
+        run: terraform plan -no-color -lock-timeout=120s -out=tfplan > plan-output.txt 2>&1
+
+      # Publica (o actualiza) un comentario por ambiente en el PR.
+      - name: Comment plan on pull request
+        if: ${{ always() }}
+        uses: actions/github-script@v7
+        env:
+          PLAN_FILE: infra/envs/${{ matrix.environment }}/plan-output.txt
+          ENVIRONMENT: ${{ matrix.environment }}
+          PLAN_OUTCOME: ${{ steps.plan.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+            const env = process.env.ENVIRONMENT;
+            const marker = `<!-- terraform-plan-${env} -->`;
+            let output = fs.existsSync(process.env.PLAN_FILE)
+              ? fs.readFileSync(process.env.PLAN_FILE, 'utf8')
+              : '(no hay salida del plan)';
+            // GitHub limita los comentarios a 65536 caracteres: recortamos el principio.
+            const max = 60000;
+            if (output.length > max) {
+              output = '... (recortado) ...\n' + output.slice(output.length - max);
+            }
+            const fence = '```';
+            const status = process.env.PLAN_OUTCOME === 'success' ? 'OK' : 'FALLO';
+            const body = [
+              marker,
+              `### Terraform plan: \`${env}\` (${status})`,
+              '',
+              fence + 'text',
+              output,
+              fence,
+              '',
+              `Ejecucion: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            // Buscar un comentario previo nuestro para actualizarlo en vez de duplicar.
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const previous = comments.find((c) => c.body && c.body.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: previous.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # Si el plan fallo, el check del PR debe quedar en rojo.
+      - name: Fail if plan failed
+        if: ${{ steps.plan.outcome == 'failure' }}
+        run: |
+          echo "::error::terraform plan fallo; lee el comentario del PR o el log."
+          exit 1

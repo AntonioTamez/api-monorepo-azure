@@ -1,0 +1,86 @@
+# Workflow: construir la imagen Docker de la API y publicarla en el ACR.
+#
+# Es un workflow REUTILIZABLE: otro workflow (deploy.yml) lo llama con "uses:".
+# Tambien se puede lanzar a mano desde la pestana Actions (workflow_dispatch).
+# Explicacion linea a linea: docs/11-cd-y-ambientes.md
+#
+# Idea clave: la imagen se construye UNA vez y se etiqueta con el SHA del commit.
+# El SHA identifica el codigo exacto de la imagen; asi sabes siempre que version corre
+# en cada ambiente y puedes volver atras (rollback) redesplegando un SHA anterior.
+
+name: Docker build
+
+on:
+  # "workflow_call": permite que otro workflow lo use como si fuera un job.
+  workflow_call:
+  # "workflow_dispatch": boton "Run workflow" en la interfaz de GitHub.
+  workflow_dispatch:
+
+# Permisos del GITHUB_TOKEN para TODOS los jobs de este workflow.
+permissions:
+  # Leer el codigo del repositorio (checkout).
+  contents: read
+  # Imprescindible para OIDC: permite al job PEDIR a GitHub un token firmado que
+  # demuestra "soy este repo, este job". Sin esto azure/login falla.
+  # Nota: en un workflow reutilizable, el workflow que lo llama tambien debe conceder
+  # este permiso (un workflow llamado nunca puede tener MAS permisos que quien lo llama).
+  id-token: write
+
+jobs:
+  build-and-push:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # El job usa el environment "dev": de ahi salen las variables ACR_NAME, etc., y
+    # el token OIDC llevara el subject "repo:OWNER/REPO:environment:dev".
+    # Las imagenes siempre se construyen en el ACR de dev; prod las COPIA desde alli.
+    environment: dev
+
+    steps:
+      # 1) Descarga el codigo en el runner (el runner empieza vacio).
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Login en Azure SIN contrasenas (OIDC). Solo se pasan IDs, que no son secretos.
+      #    "vars.X" lee una VARIABLE de GitHub (Settings > Secrets and variables > Actions).
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # 3) Prepara Docker Buildx, el motor de build moderno (permite cache entre ejecuciones).
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 4) Login de Docker en el ACR. "az acr login" usa la sesion de Azure del paso 2 y
+      #    configura las credenciales de Docker por nosotros (token temporal, sin password fija).
+      #    Alternativa: docker/login-action, pensada para registries con usuario/token.
+      - name: Log in to ACR
+        run: az acr login --name "${{ vars.ACR_NAME }}"
+
+      # 5) Construye y sube. El contexto es la RAIZ del repo (el "." del comando
+      #    docker build) y el Dockerfile esta en apps/api/Dockerfile.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          # Dos etiquetas para la misma imagen:
+          #  - el SHA del commit: inmutable, es la que se despliega.
+          #  - latest: puntero movil; solo sirve para que el primer arranque de la
+          #    web app (Terraform apunta a api:latest) encuentre una imagen.
+          tags: |
+            ${{ vars.ACR_NAME }}.azurecr.io/api:${{ github.sha }}
+            ${{ vars.ACR_NAME }}.azurecr.io/api:latest
+          # Cache de capas en el almacen de GitHub Actions: acelera builds repetidos.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 6) Resumen visible en la pagina de la ejecucion.
+      - name: Summary
+        run: |
+          echo "Imagen publicada: ${{ vars.ACR_NAME }}.azurecr.io/api:${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"

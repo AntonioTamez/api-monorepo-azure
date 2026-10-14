@@ -156,6 +156,8 @@ Hay dos niveles de configuración:
 | `TFSTATE_STORAGE_ACCOUNT` | `stdevopslabtfa1b2` | Bootstrap |
 | `BUILD_ACR_NAME` | Nombre del ACR de **dev** | `terraform -chdir=infra/envs/dev output -raw acr_name`. Las imágenes se construyen una vez y se publican aquí |
 
+Opcional: `ENABLE_PROD` = `true` activa `prod` en los workflows de plan, apply y deploy (capítulo [11](11-cd-y-ambientes.md)). Si no existe o vale otra cosa, los workflows solo tocan `dev`, y así no gastas dinero por accidente.
+
 > No hace falta ningún *secret*. Si algún tutorial te pide `AZURE_CLIENT_SECRET`, es la forma antigua: aquí no existe.
 
 Con GitHub CLI (**solo como referencia; esto escribe en GitHub, ejecútalo tú cuando estés listo**):

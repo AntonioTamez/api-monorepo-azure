@@ -1,0 +1,137 @@
+# Workflow: desplegar la API en Azure (dev automatico, prod con aprobacion manual).
+# Explicacion linea a linea: docs/11-cd-y-ambientes.md
+#
+# Flujo:   push a master  ->  build (docker-build.yml)  ->  deploy dev  ->  smoke test
+#                                                       ->  [aprobacion]  ->  deploy prod  ->  smoke test
+#
+# ROLLBACK: lanza este workflow a mano (Run workflow) e indica en "image_tag" el SHA de
+# una version anterior que ya este en el ACR. No reconstruye nada: solo redespliega.
+
+name: Deploy
+
+on:
+  # Cada merge a master que toque la aplicacion o su empaquetado.
+  push:
+    branches: [master]
+    paths:
+      - "apps/**"
+      - "global.json"
+      - "Directory.Build.props"
+      - ".github/workflows/deploy.yml"
+      - ".github/workflows/docker-build.yml"
+  # Lanzamiento manual (sirve para rollback o para desplegar sin cambios de codigo).
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "SHA de una imagen ya publicada (rollback). Vacio = construir y desplegar el commit actual."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  # Se concede aqui porque el workflow llamado (docker-build.yml) lo necesita y no puede
+  # tener mas permisos que quien lo llama. Tambien lo usan los jobs de despliegue.
+  id-token: write
+
+# Solo un despliegue a la vez; si llega otro, espera (no cancelamos uno en curso:
+# interrumpir un despliegue a mitad puede dejar el ambiente a medias).
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  # Que etiqueta de imagen se despliega: la indicada a mano (rollback) o el commit actual.
+  # En un push, "inputs.image_tag" esta vacio y se usa github.sha.
+  IMAGE_TAG: ${{ inputs.image_tag != '' && inputs.image_tag || github.sha }}
+
+jobs:
+  # JOB 1: construir y publicar la imagen. Se omite en un rollback.
+  build:
+    name: Build image
+    if: ${{ inputs.image_tag == '' }}
+    # "uses" a nivel de job llama a un workflow reutilizable (como una funcion).
+    uses: ./.github/workflows/docker-build.yml
+
+  # JOB 2: desplegar. Una matriz con dos valores = el mismo job dos veces (dev y prod).
+  deploy:
+    name: Deploy to ${{ matrix.environment }}
+    needs: build
+    # "needs" por defecto exige que build termine bien; si build se omitio (rollback)
+    # el job se saltaria tambien. Esta condicion lo permite si build fue OK u omitido.
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      # fail-fast: si dev falla, prod ni se intenta.
+      fail-fast: true
+      # max-parallel: 1 = uno detras de otro, en el orden de la lista (dev y luego prod).
+      max-parallel: 1
+      matrix:
+        # Prod solo se despliega si activaste la variable de repositorio ENABLE_PROD=true
+        # (evita costos y errores si todavia no creaste prod).
+        environment: ${{ fromJSON(vars.ENABLE_PROD == 'true' && '["dev","prod"]' || '["dev"]') }}
+
+    # CLAVE: el job usa el environment de la matriz. Para "prod", GitHub PAUSA el job hasta
+    # que un revisor requerido lo apruebe. Ademas, el environment aporta sus propias
+    # variables (RESOURCE_GROUP, ACR_NAME, APP_NAME) y el subject OIDC correcto.
+    environment:
+      name: ${{ matrix.environment }}
+      url: ${{ steps.deploy.outputs.webapp-url }}
+
+    steps:
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Solo en prod: la imagen se construyo en el ACR de dev; aqui se COPIA al ACR de prod
+      # (az acr import, sin descargar nada al runner). Asi prod ejecuta EXACTAMENTE los
+      # mismos bytes que se probaron en dev ("build once, promote").
+      - name: Import image into the prod registry
+        if: ${{ matrix.environment == 'prod' }}
+        env:
+          BUILD_ACR_NAME: ${{ vars.BUILD_ACR_NAME }}
+          TARGET_ACR_NAME: ${{ vars.ACR_NAME }}
+        run: |
+          SOURCE_ID="$(az acr show --name "$BUILD_ACR_NAME" --query id --output tsv)"
+          az acr import \
+            --name "$TARGET_ACR_NAME" \
+            --registry "$SOURCE_ID" \
+            --source "$BUILD_ACR_NAME.azurecr.io/api:$IMAGE_TAG" \
+            --image "api:$IMAGE_TAG" \
+            --force
+
+      # Cambia la imagen de la web app. La web app descarga la imagen del ACR con su
+      # identidad administrada (rol AcrPull que creo Terraform), sin contrasenas.
+      - name: Deploy container to App Service
+        id: deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.APP_NAME }}
+          images: ${{ vars.ACR_NAME }}.azurecr.io/api:${{ env.IMAGE_TAG }}
+
+      # Smoke test: una comprobacion minima de que lo desplegado responde.
+      # Reintenta porque el contenedor tarda un rato en arrancar tras el despliegue.
+      - name: Smoke test /health
+        env:
+          RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
+          APP_NAME: ${{ vars.APP_NAME }}
+        run: |
+          HOST="$(az webapp show --resource-group "$RESOURCE_GROUP" --name "$APP_NAME" --query defaultHostName --output tsv)"
+          URL="https://$HOST/health"
+          echo "Probando $URL"
+          for attempt in $(seq 1 15); do
+            # -s silencioso, -o /dev/null descarta el cuerpo, -w imprime solo el codigo HTTP.
+            CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$URL" || true)"
+            echo "Intento $attempt/15: HTTP $CODE"
+            if [ "$CODE" = "200" ]; then
+              echo "OK: la API responde."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::La API no respondio 200 en $URL. Revisa los logs en Azure (docs/12)."
+          exit 1
