@@ -53,7 +53,7 @@ jobs:
 
       # 3) Prepara Docker Buildx, el motor de build moderno (permite cache entre ejecuciones).
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       # 4) Login de Docker en el ACR. "az acr login" usa la sesion de Azure del paso 2 y
       #    configura las credenciales de Docker por nosotros (token temporal, sin password fija).
