@@ -19,8 +19,9 @@ Este repositorio también es un laboratorio práctico para aprender DevOps desde
 | [06 - GitHub Actions](docs/06-github-actions.md) | Workflow de CI, triggers, permisos, caché, artefactos, Dependabot y protección de rama |
 | [07 - Terraform: fundamentos](docs/07-terraform-fundamentos.md) | IaC, flujo init/plan/apply/destroy, state, providers y sintaxis HCL |
 | [08 - Terraform: módulos](docs/08-terraform-modulos.md) | Por qué módulos y cada módulo (`resource_group`, `acr`, `monitoring`, `app_service`) explicado recurso por recurso |
+| [09 - Terraform: ambientes y comandos](docs/09-terraform-ambientes-y-comandos.md) | `infra/envs/dev` y `prod`, comandos exactos, leer un plan, state, drift, errores y costos |
 
-Los capítulos siguientes (ambientes de Terraform, identidad OIDC, CD, operación) se irán añadiendo a esta tabla.
+Los capítulos siguientes (identidad OIDC en el 10, CD en el 11 y operación en el 12) se irán añadiendo a esta tabla.
 
 ## Structure
 
