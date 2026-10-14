@@ -1,0 +1,106 @@
+# api-monorepo-azure
+
+Monorepo with a .NET 10 Web API (minimal API + Swagger).
+
+## Structure
+
+```
+.
+├── Monorepo.slnx          # Solution file
+└── apps/
+    └── api/               # ASP.NET Core Web API (net10.0)
+        ├── Program.cs
+        └── Users/         # GET /user endpoint + response model
+```
+
+## Prerequisites
+
+- [.NET SDK 10](https://dotnet.microsoft.com/download/dotnet/10.0) — verify with `dotnet --version`
+- (Optional) Git
+
+For HTTPS in local development, trust the dev certificate once:
+
+```bash
+dotnet dev-certs https --trust
+```
+
+## Commands
+
+Run everything from the repository root.
+
+```bash
+# Restore dependencies
+dotnet restore
+
+# Build the whole solution
+dotnet build
+
+# Run the API (http://localhost:5251, https://localhost:7071)
+dotnet run --project apps/api
+
+# Run with the https profile
+dotnet run --project apps/api --launch-profile https
+
+# Run with hot reload
+dotnet watch --project apps/api
+
+# Release build / publish
+dotnet build -c Release
+dotnet publish apps/api -c Release -o ./publish
+
+# Clean build outputs
+dotnet clean
+```
+
+## Endpoints
+
+| Method | Path    | Auth | Description              |
+| ------ | ------- | ---- | ------------------------ |
+| GET    | `/user` | None | Returns the list of users |
+
+- Swagger UI: <http://localhost:5251/swagger>
+- OpenAPI JSON: <http://localhost:5251/swagger/v1/swagger.json>
+
+Quick test:
+
+```bash
+curl http://localhost:5251/user
+```
+
+Response item:
+
+```json
+{
+  "name": "Juan",
+  "paternalLastName": "Pérez",
+  "maternalLastName": "García",
+  "address": "Av. Reforma 123",
+  "phone": "+52 55 1234 5678",
+  "country": "Mexico",
+  "city": "Mexico City",
+  "permissions": ["read", "write", "delete"],
+  "isActive": true
+}
+```
+
+> The data is currently hardcoded in `apps/api/Users/UserEndpoints.cs`.
+
+## Notes
+
+- Swagger is enabled in all environments. Restrict it to Development before deploying to production.
+- Change the port with `dotnet run --project apps/api --urls http://localhost:8080`.
+- If a build fails with locked files, stop any running `Api.exe` process or run `dotnet build-server shutdown`.
+
+## Adding more projects to the monorepo
+
+```bash
+# New project
+dotnet new xunit -n Api.Tests -o tests/Api.Tests
+dotnet add tests/Api.Tests reference apps/api
+
+# Register it in the solution
+dotnet sln add tests/Api.Tests
+
+# Run all tests
+dotnet test
+```
