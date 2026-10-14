@@ -14,6 +14,7 @@ Este repositorio también es un laboratorio práctico para aprender DevOps desde
 | [01 - Requisitos y setup](docs/01-requisitos-y-setup.md) | Instalar y verificar las herramientas en Windows |
 | [02 - Git y ramas](docs/02-git-y-ramas.md) | Flujo de ramas, Conventional Commits, pull requests y protección de ramas |
 | [03 - La aplicación](docs/03-la-aplicacion.md) | La API, el endpoint `/health` y los archivos de configuración del repositorio |
+| [04 - Testing](docs/04-testing.md) | Tests con xUnit, `tests/Api.Tests`, TDD y cómo ejecutarlos |
 
 Los capítulos siguientes (la aplicación, tests, Docker, GitHub Actions, Terraform, Azure) se irán añadiendo a esta tabla.
 
@@ -25,7 +26,10 @@ Los capítulos siguientes (la aplicación, tests, Docker, GitHub Actions, Terraf
 └── apps/
     └── api/               # ASP.NET Core Web API (net10.0)
         ├── Program.cs
+        ├── Health/        # GET /health endpoint
         └── Users/         # GET /user endpoint + response model
+└── tests/
+    └── Api.Tests/         # xUnit integration tests (WebApplicationFactory)
 ```
 
 ## Prerequisites
