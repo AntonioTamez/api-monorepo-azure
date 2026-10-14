@@ -21,3 +21,4 @@ Delivery strategy: ask-on-risk (forecast >400 lines; slices decided before next 
 - T1: delegated writer; commit c8462f7 (docs: glossary, setup, git flow, README index). Check: structural readback only (passive docs).
 - T2: delegated writer; commit 5e79298 (feat(api): health endpoint + repo config). Check: `dotnet build Monorepo.slnx --artifacts-path <scratch>` -> 0 warnings, 0 errors (default output was locked by a running Api process).
 - T3: delegated writer; tests/Api.Tests (7 tests). RED: observed via deliberate mutation of /health ("Healthy"->"Broken"): Failed 2, Passed 5; reverted. GREEN: Failed 0, Passed 7 (run with --artifacts-path because a user-owned Api.exe PID 14496 locks apps/api/bin; plain `dotnet test Monorepo.slnx` fails with MSB3027 until that process stops). Commit hash in the next line.
+- T3 commit: 3e7c055
