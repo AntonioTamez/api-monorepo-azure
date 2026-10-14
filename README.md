@@ -13,6 +13,7 @@ Este repositorio también es un laboratorio práctico para aprender DevOps desde
 | [00 - Glosario](docs/00-glosario.md) | Definición de todos los términos (CI, CD, runner, Terraform, OIDC...) |
 | [01 - Requisitos y setup](docs/01-requisitos-y-setup.md) | Instalar y verificar las herramientas en Windows |
 | [02 - Git y ramas](docs/02-git-y-ramas.md) | Flujo de ramas, Conventional Commits, pull requests y protección de ramas |
+| [03 - La aplicación](docs/03-la-aplicacion.md) | La API, el endpoint `/health` y los archivos de configuración del repositorio |
 
 Los capítulos siguientes (la aplicación, tests, Docker, GitHub Actions, Terraform, Azure) se irán añadiendo a esta tabla.
 
@@ -71,6 +72,7 @@ dotnet clean
 | Method | Path    | Auth | Description              |
 | ------ | ------- | ---- | ------------------------ |
 | GET    | `/user` | None | Returns the list of users |
+| GET    | `/health` | None | Returns `{"status":"Healthy"}` |
 
 - Swagger UI: <http://localhost:5251/swagger>
 - OpenAPI JSON: <http://localhost:5251/swagger/v1/swagger.json>
@@ -101,7 +103,7 @@ Response item:
 
 ## Notes
 
-- Swagger is enabled in all environments. Restrict it to Development before deploying to production.
+- Swagger is only enabled in the Development environment.
 - Change the port with `dotnet run --project apps/api --urls http://localhost:8080`.
 - If a build fails with locked files, stop any running `Api.exe` process or run `dotnet build-server shutdown`.
 
