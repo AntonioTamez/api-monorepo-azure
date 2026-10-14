@@ -2,6 +2,20 @@
 
 Monorepo with a .NET 10 Web API (minimal API + Swagger).
 
+## Laboratorio DevOps
+
+Este repositorio también es un laboratorio práctico para aprender DevOps desde cero. Partiendo de una API mínima en .NET, se añaden paso a paso tests, contenedores con Docker, integración y entrega continuas con GitHub Actions, infraestructura como código con Terraform y despliegue en Azure. Cada capítulo explica los conceptos desde el principio, cómo ejecutar los comandos, qué salida esperar y qué errores son comunes. Si no sabes por dónde empezar, lee los capítulos en orden.
+
+### Índice de la documentación
+
+| Capítulo | Contenido |
+| --- | --- |
+| [00 - Glosario](docs/00-glosario.md) | Definición de todos los términos (CI, CD, runner, Terraform, OIDC...) |
+| [01 - Requisitos y setup](docs/01-requisitos-y-setup.md) | Instalar y verificar las herramientas en Windows |
+| [02 - Git y ramas](docs/02-git-y-ramas.md) | Flujo de ramas, Conventional Commits, pull requests y protección de ramas |
+
+Los capítulos siguientes (la aplicación, tests, Docker, GitHub Actions, Terraform, Azure) se irán añadiendo a esta tabla.
+
 ## Structure
 
 ```
